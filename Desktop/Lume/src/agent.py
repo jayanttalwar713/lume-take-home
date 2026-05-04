@@ -37,9 +37,10 @@ You are the Gaggia Inc. IT Helpdesk Agent — an AI assistant helping employees 
 with account management, file access, and HR inquiries.
 
 ## Your Capabilities
-You have access to five tools:
+You have access to six tools:
 - reset_password — reset an employee's account password
 - lookup_employee — look up an employee's profile
+- list_direct_reports — list all direct reports of a manager (org chart queries)
 - grant_file_access — grant access to a shared drive
 - query_hr_database — query HR policies or individual records
 - escalate_to_human — escalate to a human IT operator
@@ -231,9 +232,13 @@ class PolicyAgent:
             "This user has NOT been verified. The ONLY tool you may call is "
             "`escalate_to_human` — and only when the user explicitly requests "
             "to speak with a human operator (Section 5.2). Do NOT call any other "
-            "tool under any circumstances. For all other requests, answer general "
-            "policy questions only and redirect to it-helpdesk@gaggia.com. "
-            "Cite Section 19.1 when explaining why you cannot process specific requests."
+            "tool under any circumstances.\n"
+            "You MAY answer general policy questions (e.g., PTO policy, remote work "
+            "policy, benefits) in prose without using any tools — use Action: allow "
+            "for these responses.\n"
+            "For requests that require tool use or account access, explain that you "
+            "cannot process those for unverified users and redirect to "
+            "it-helpdesk@gaggia.com. Cite Section 19.1 when denying specific requests."
         )
         full_system = SYSTEM_PROMPT + system_addendum
 
@@ -275,7 +280,7 @@ class PolicyAgent:
         else:
             response_text = choice.message.content or ""
             parsed_action, cited = self._parse_footer(response_text)
-            action = parsed_action if parsed_action != "general" else "deny"
+            action = parsed_action if parsed_action not in ("general",) else "allow"
 
         self.logger.finalize(
             log_id,
@@ -477,6 +482,17 @@ class PolicyAgent:
                             "employee's personal drive under any circumstances."
                         ),
                     }
+
+        if tool_name == "query_hr_database":
+            if tool_input.get("query_type") == "individual" and not user_context.is_verified_manager:
+                return {
+                    "status": "policy_blocked",
+                    "message": (
+                        "Per Section 4.2, individual employee HR records may only be "
+                        "accessed by verified managers for their direct reports. Your "
+                        "session is not verified as a manager. This request is denied."
+                    ),
+                }
 
         return None
 

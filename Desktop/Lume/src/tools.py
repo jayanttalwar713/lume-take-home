@@ -467,6 +467,37 @@ def query_hr_database(query_type: str, employee_id: str | None = None) -> dict:
     return {"error": f"Unknown query_type: {query_type}"}
 
 
+def list_direct_reports(manager_id: str) -> dict:
+    """List all direct reports of a manager by employee ID or name."""
+    query = manager_id.strip()
+    emp_id = query.upper() if query.upper() in EMPLOYEES else EMPLOYEE_NAME_INDEX.get(query.lower())
+    if not emp_id:
+        for name, eid in EMPLOYEE_NAME_INDEX.items():
+            if query.lower() in name:
+                emp_id = eid
+                break
+    if not emp_id or emp_id not in EMPLOYEES:
+        return {"status": "not_found", "message": f"Manager '{manager_id}' not found."}
+    emp = EMPLOYEES[emp_id]
+    report_ids = emp.get("direct_reports", [])
+    reports = []
+    for rid in report_ids:
+        r = EMPLOYEES.get(rid, {})
+        reports.append({
+            "employee_id": rid,
+            "name": r.get("name", "Unknown"),
+            "title": r.get("title", "Unknown"),
+            "department": r.get("department", "Unknown"),
+            "work_email": r.get("work_email", "Unknown"),
+        })
+    return {
+        "status": "success",
+        "manager_id": emp_id,
+        "manager_name": emp["name"],
+        "direct_reports": reports,
+    }
+
+
 def escalate_to_human(reason: str, conversation_summary: str) -> dict:
     """Escalate conversation to a human IT operator. Returns ticket ID."""
     ticket_id = f"ESC-{datetime.now().strftime('%Y%m%d')}-{random.randint(100, 999)}"
@@ -556,6 +587,20 @@ TOOL_DEFINITIONS = [
         },
     },
     {
+        "name": "list_direct_reports",
+        "description": "List all direct reports of a manager. Use this for org-chart queries ('who reports to X?'). Returns name, title, department, and work email for each direct report.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "manager_id": {
+                    "type": "string",
+                    "description": "The manager's employee ID (e.g., EMP-1043) or full name (e.g., 'David Kim').",
+                }
+            },
+            "required": ["manager_id"],
+        },
+    },
+    {
         "name": "escalate_to_human",
         "description": "Escalate the conversation to a human IT operator. Use when a request is out of policy scope, the user requests human assistance, or the situation is ambiguous and high-risk.",
         "input_schema": {
@@ -580,5 +625,6 @@ TOOL_DISPATCH = {
     "lookup_employee": lookup_employee,
     "grant_file_access": grant_file_access,
     "query_hr_database": query_hr_database,
+    "list_direct_reports": list_direct_reports,
     "escalate_to_human": escalate_to_human,
 }

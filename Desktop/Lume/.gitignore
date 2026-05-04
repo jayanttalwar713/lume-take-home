@@ -1,5 +1,6 @@
 .env
-logs/
+logs/*.jsonl
+logs/session_*
 __pycache__/
 *.pyc
 *.pyo
